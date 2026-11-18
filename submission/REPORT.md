@@ -42,26 +42,26 @@ Số liệu từ `submission/calibration/calibration_report.md` (39 ảnh calib,
 4. **Ảnh gần trùng biến đổi mạnh** (cắt, xoay, đổi màu): phash khó bắt, calib cũng chỉ chứa 6 ca.
 
 ## 5. Train: raw vs clean (tùy chọn, chấm riêng)
-Train trên Colab T4: yolo26n, 20 epoch, 2 seed (0, 1) cho mỗi biến thể, cùng val/test và siêu tham số. Dataset `clean` là **bản nháp** (kết luận Hold), không phải bản phát hành. **Lưu ý:** lượt train này chạy trên bản `clean_v1` tạo với `phash_dist = 16` (193 ảnh). Sau đó tôi đổi sang 12 (202 ảnh, xem §3) nên `export/clean_v1` hiện tại khác bản đã train và chưa được train lại.
+Train trên Colab T4: yolo26n, 20 epoch, 2 seed (0, 1) cho mỗi biến thể, cùng val/test và siêu tham số, trên bản `clean_v1` hiện tại (`phash_dist = 12`, 202 ảnh). Dataset `clean` là **bản nháp** (kết luận Hold), không phải bản phát hành.
 
 | biến thể | #ảnh train | seed | mAP50 | mAP50-95 | precision | recall |
 |---|---|---|---|---|---|---|
 | raw | 224 | 2 | 0,726 ± 0,000 | 0,512 ± 0,004 | 0,764 ± 0,061 | 0,649 ± 0,028 |
-| clean | 193 | 2 | 0,730 ± 0,001 | 0,501 ± 0,001 | 0,800 ± 0,019 | 0,624 ± 0,012 |
+| clean | 202 | 2 | 0,701 ± 0,025 | 0,487 ± 0,008 | 0,759 ± 0,003 | 0,625 ± 0,019 |
 
-Chênh mAP50 (clean − raw) = **+0,004**.
+Chênh mAP50 (clean − raw) = **−0,025**.
 
-**So với nhiễu.** Độ lệch chuẩn giữa 2 seed rất nhỏ (≤ 0,001 với mAP50), nhưng chỉ có 2 seed nên con số này không đáng tin; thêm vào đó tập test chỉ có khoảng 100 ảnh, nên nhiễu thật lớn hơn nhiều. Chênh +0,004 ở mAP50 là rất nhỏ so với mức nhiễu đó. mAP50-95 thì clean còn thấp hơn raw 0,011 và recall thấp hơn 0,025. Precision của clean cao hơn (0,800 so với 0,764) nhưng độ lệch của raw là 0,061, nên cũng nằm trong nhiễu.
+**So với nhiễu.** Chênh −0,025 ở mAP50 xấp xỉ bằng độ lệch chuẩn giữa 2 seed của chính clean (0,025), nên chưa vượt khỏi nhiễu. Chỉ có 2 seed nên độ lệch chuẩn không đáng tin (raw ra ± 0,000 vì hai seed cho cùng kết quả làm tròn), cộng với tập test chỉ khoảng 100 ảnh nên nhiễu thật còn lớn hơn. mAP50-95 cũng thấp hơn 0,025 (độ lệch 0,008) và recall thấp hơn 0,024; precision gần bằng nhau (0,759 so với 0,764). Mọi chỉ số đều nghiêng nhẹ về phía raw, nhưng mức chênh đều nhỏ.
 
-**Kết luận trung thực:** chưa đủ bằng chứng nói clean tốt hơn raw; khác biệt nằm trong nhiễu và không nhất quán giữa các chỉ số.
+**Kết luận trung thực:** chưa kết luận được clean tốt hơn raw. Kết quả còn nghiêng nhẹ về raw, nhưng nằm trong nhiễu, nên không thể nói clean làm model tệ hơn.
 
 **Nguyên nhân có thể và cách kiểm:**
-1. *Raw có rò rỉ test nhưng không đủ làm điểm cao giả.* Với ngưỡng 12, raw chứa 5 ảnh trùng với tập test (11 ở ngưỡng 16, nhưng ít nhất vài ảnh trong đó là phát hiện oan), đáng lẽ làm mAP của raw cao hơn, nhưng thực tế không. Với khoảng 5/224 ảnh (2%), tác động có thể quá nhỏ. Kiểm: bỏ riêng các ảnh này khỏi raw rồi train lại, xem mAP thay đổi bao nhiêu.
-2. *Clean còn nhãn chưa được người duyệt.* Còn ảnh cảnh báo chưa duyệt (38/202 ở bản `phash_dist = 12`), và 45 ảnh trong hàng đợi chưa ai xem, nên nhãn nhiễu vẫn còn lại trong clean. Kiểm: duyệt hết hàng đợi, rồi train lại và so sánh.
-3. *Test chỉ 100 ảnh và chỉ 2 seed.* Độ lệch chuẩn từ 2 seed gần như vô nghĩa. Kiểm: tăng lên ≥ 5 seed, hoặc dùng tập test lớn hơn.
-4. *Clean ít ảnh hơn raw* (193 ảnh lúc train, so với 224), nên một phần chênh lệch có thể do số lượng dữ liệu chứ không phải chất lượng nhãn. Kiểm: train raw trên tập con ngẫu nhiên 193 ảnh.
+1. *Clean ít ảnh hơn raw* (202 so với 224, ít hơn 10%): với dataset nhỏ, mất 22 ảnh có thể làm giảm mAP, bất kể chất lượng nhãn. Kiểm: train raw trên tập con ngẫu nhiên 202 ảnh để so công bằng về số lượng.
+2. *Clean còn nhãn chưa được người duyệt.* 38/202 ảnh còn cảnh báo, 45 ảnh trong hàng đợi chưa ai xem, nên nhãn nhiễu vẫn còn trong clean. Kiểm: duyệt hết hàng đợi, rồi train lại.
+3. *Rò rỉ test của raw làm điểm raw cao hơn.* Raw chứa 5 ảnh trùng với tập test, nên raw được "xem trước" một phần test, đẩy mAP lên. Kiểm: bỏ riêng 5 ảnh này khỏi raw rồi train lại, xem mAP raw giảm bao nhiêu.
+4. *Test chỉ 100 ảnh và chỉ 2 seed.* Kiểm: tăng lên ≥ 5 seed, hoặc dùng tập test lớn hơn.
 
-**Việc tiếp theo:** duyệt hết hàng đợi để dataset đủ điều kiện Release, rồi train lại (trên bản `phash_dist = 12`) với ≥ 5 seed.
+**Việc tiếp theo:** duyệt hết hàng đợi để dataset đủ điều kiện Release, rồi train lại với ≥ 5 seed và đối chứng raw cùng số ảnh.
 
 ## 6. Quyết định và ghi chú AI
 **(a) Quyết định cuối: Hold.** Không còn lỗi bắt buộc, nhưng 38/202 ảnh (18,8%) còn cảnh báo chưa người duyệt, vượt ngưỡng 10%. Để thành Release cần: duyệt thêm 45 ảnh còn lại trong hàng đợi (ngân sách duyệt hiện 80/125), hoặc nâng ngân sách để tỉ lệ cảnh báo dưới 10% (≤ 20 ảnh). Ngoài ra cần có người xác nhận 6 ảnh thiếu nhãn.
