@@ -25,5 +25,43 @@ from ..common import ERROR, WARN, Issue, iou_xywh, parse_yolo_line  # noqa: F401
 
 
 def run(ds, cfg):
-    # TODO: duyệt từng file nhãn, từng dòng
-    raise NotImplementedError("check label_format chưa làm")
+    c = cfg["label_format"]
+    n_cls = len(ds.classes)
+    issues = []
+
+    def add(sev, code, stem, msg, line, **extra):
+        issues.append(Issue("label_format", sev, code, stem, msg, line=line, extra=extra))
+
+    for lf in ds.label_files():
+        stem = lf.stem
+        seen = []                      # các box hợp lệ ở dòng trước (để bắt DUP_BOX)
+        size = ds.image_size(stem)
+        for no, text in ds.read_label_lines(stem) or []:
+            try:
+                cid, x, y, w, h = parse_yolo_line(text)
+            except ValueError as e:
+                add(ERROR, "BAD_FORMAT", stem, f"dòng không đúng định dạng: {e}", no)
+                continue
+            if not 0 <= cid < n_cls:
+                add(ERROR, "BAD_CLASS_ID", stem, f"id lớp {cid} ngoài 0..{n_cls - 1}", no, class_id=cid)
+                continue
+            if w <= 0 or h <= 0:
+                add(ERROR, "BOX_ZERO", stem, f"box rỗng (w={w}, h={h})", no)
+                continue
+
+            overflow = max(0.0, -(x - w / 2), (x + w / 2) - 1, -(y - h / 2), (y + h / 2) - 1)
+            if overflow > c["overflow_tol"]:
+                add(ERROR, "BOX_OUT_OF_IMAGE", stem, f"box tràn ra ngoài ảnh {overflow:.4f}", no, overflow=overflow)
+
+            box = (x, y, w, h)
+            if any(pc == cid and iou_xywh(pb, box) > c["dup_box_iou"] for pc, pb in seen):
+                add(ERROR, "DUP_BOX", stem, "box trùng với một dòng trước đó (cùng lớp)", no)
+            seen.append((cid, box))
+
+            if size:
+                short = min(w * size[0], h * size[1])
+                if short < c["min_box_px"]:
+                    add(WARN, "BOX_TINY", stem, f"cạnh ngắn {short:.1f}px < {c['min_box_px']}px", no, short_px=short)
+            if w * h > c["max_box_frac"]:
+                add(WARN, "BOX_HUGE", stem, f"box chiếm {w * h:.2f} diện tích ảnh", no, frac=w * h)
+    return issues
